@@ -1,0 +1,91 @@
+
+%macro dpsub (name=, input=, date=, daten=);
+
+proc import datafile="P:\Clinical_Data_Archive_Feasibility\project_extracts\Merck_CRC\&input"
+out=&name
+dbms=dlm
+replace;
+datarow=2;
+delimiter='09'x;
+guessingrows=10000;
+run;
+
+data &name;
+set &name;
+where SubjectID ne .;
+run;
+
+proc sort; by SubjectID RecordPosition InstanceRepeatNumber PageRepeatNumber FolderName;
+run;
+
+proc transpose data=&name out=&name._w;
+by SubjectID RecordPosition InstanceRepeatNumber PageRepeatNumber FolderName;
+id FieldOID;
+var Data;
+run;
+
+%if &name ne enrol %then %do;
+
+proc sort data=&name._w; by SubjectID;
+run;
+
+proc sort data=rand1; by SubjectID;
+run;
+
+data &name._w;
+merge rand1 &name._w (in=a);
+by SubjectID;
+if a;
+run;
+
+data &name._w_d8;
+set &name._w;
+&date=compress(&date);
+&daten=input(&date,date9.);
+
+stdy = &daten - RANDDTN;
+run;
+
+data &name._w1;
+set &name._w_d8;
+count + 1;
+by SubjectID;
+if first.SubjectID then count = 1;
+run;
+
+data &name._w2;
+set &name._w1;
+by SubjectID;
+if last.SubjectID;
+run;
+
+proc means data=&name._w2;
+var count;
+run;
+%end;
+
+%mend dpsub;
+
+%dpsub(name=enrol, input=en_1377.txt, date=, daten=); /****ENROLLMENT (RANDOMIZATION DATE)****/
+
+data rand;
+set enrol_w;
+keep SubjectID RANDDT;
+run;
+
+data rand1;
+set rand;
+RANDDT=compress(RANDDT);
+RANDDTN=input(RANDDT,date9.);
+run;
+
+/**BASELINE**/
+%dpsub(name=ae, input=ae_1377.txt, date=STARTDT, daten=STARTDTN); /****ADVERSE EVENTS****/
+%dpsub(name=cea, input=cea_1377.txt, date=VISITDT, daten=VISITDTN); /****CEA LAB INFO.****/
+%dpsub(name=cm, input=cm_1377.txt, date=STARTDT, daten=STARTDTN); /****CON MEDS****/
+%dpsub(name=vs, input=vs_1377.txt, date=VISITDT, daten=VISITDTN); /****VITAL SIGNS****/
+%dpsub(name=chem, input=chem_1377.txt, date=VISITDT, daten=VISITDTN);/****LAB CHEM****/
+%dpsub(name=hem, input=hem_1377.txt, date=VISITDT, daten=VISITDTN);/****LAB HEM****/
+/***RECIST INFO***/
+%dpsub(name=ntl, input=ntles_1377.txt); /****NON-TARGET LESIONS****/
+%dpsub(name=tl, input=tles_1377.txt); /****TARGET LESIONS****/
